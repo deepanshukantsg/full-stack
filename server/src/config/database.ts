@@ -8,7 +8,7 @@ export const AppDataSource = new DataSource({
   database: process.env.DB_NAME || "fullstack",
   username: process.env.DB_USER || "deepanshu",
   password: process.env.DB_PASSWORD || "",
-  synchronize: process.env.NODE_ENV !== "production",
+  synchronize: process.env.NODE_ENV !== "production" || process.env.SYNCHRONIZE === "true",
   logging: process.env.NODE_ENV !== "production",
   entities: [User],
 });
