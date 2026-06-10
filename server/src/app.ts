@@ -15,7 +15,7 @@ app.use(
     origin: [
       "http://localhost:3000",
       "http://localhost:3001",
-      "https://full-stack-client-hhwg.onrender.com/",
+      "https://full-stack-client-hhwg.onrender.com",
     ],
     credentials: true,
   }),
