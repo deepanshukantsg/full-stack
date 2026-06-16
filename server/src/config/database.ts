@@ -1,5 +1,6 @@
 import { DataSource } from "typeorm";
 import { User } from "../entities/User";
+import { Tasks } from "../entities/Tasks";
 
 export const AppDataSource = new DataSource({
   type: "postgres",
@@ -11,5 +12,5 @@ export const AppDataSource = new DataSource({
   synchronize:
     process.env.NODE_ENV !== "production" || process.env.SYNCHRONIZE === "true",
   logging: process.env.NODE_ENV !== "production",
-  entities: [User],
+  entities: [User, Tasks],
 });

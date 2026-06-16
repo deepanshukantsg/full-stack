@@ -155,6 +155,12 @@ export default function Home() {
               >
                 {loadingUsers ? "Loading..." : "Show All Users"}
               </button>
+              <Link
+                href="/tasks"
+                className="px-6 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 transition"
+              >
+                My Tasks
+              </Link>
               <button
                 onClick={handleLogout}
                 className="px-6 py-2 rounded-lg border border-red-500 text-red-500 text-sm font-medium hover:bg-red-50 transition"

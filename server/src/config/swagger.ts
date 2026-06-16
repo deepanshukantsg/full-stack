@@ -52,6 +52,62 @@ const options: swaggerJsdoc.Options = {
             message: { type: "string", example: "User not found" },
           },
         },
+        Task: {
+          type: "object",
+          properties: {
+            id: { type: "integer", example: 1 },
+            title: { type: "string", example: "Build login page" },
+            description: { type: "string", example: "Implement auth UI" },
+            status: {
+              type: "string",
+              enum: ["To Do", "In Progress", "Code Review", "PR Review", "Dev Complete"],
+              example: "To Do",
+            },
+            priority: {
+              type: "string",
+              enum: ["Low", "Medium", "High", "HIGHEST"],
+              example: "Medium",
+            },
+            dueDate: { type: "string", format: "date", example: "2026-07-01", nullable: true },
+            developerId: { type: "integer", example: 3, nullable: true },
+            createdAt: { type: "string", format: "date-time" },
+          },
+        },
+        CreateTaskBody: {
+          type: "object",
+          required: ["title", "description"],
+          properties: {
+            title: { type: "string", example: "Build login page" },
+            description: { type: "string", example: "Implement auth UI" },
+            status: {
+              type: "string",
+              enum: ["To Do", "In Progress", "Code Review", "PR Review", "Dev Complete"],
+            },
+            priority: {
+              type: "string",
+              enum: ["Low", "Medium", "High", "HIGHEST"],
+            },
+            dueDate: { type: "string", format: "date", example: "2026-07-01" },
+            developerId: { type: "integer", example: 3 },
+          },
+        },
+        UpdateTaskBody: {
+          type: "object",
+          properties: {
+            title: { type: "string", example: "Build login page" },
+            description: { type: "string", example: "Implement auth UI" },
+            status: {
+              type: "string",
+              enum: ["To Do", "In Progress", "Code Review", "PR Review", "Dev Complete"],
+            },
+            priority: {
+              type: "string",
+              enum: ["Low", "Medium", "High", "HIGHEST"],
+            },
+            dueDate: { type: "string", format: "date", example: "2026-07-01" },
+            developerId: { type: "integer", example: 3 },
+          },
+        },
         UpdateUserSkillBody: {
           type: "object",
           required: ["skill"],
