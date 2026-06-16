@@ -7,6 +7,13 @@ import {
   UpdateDateColumn,
 } from "typeorm";
 
+export enum UserSkill {
+  BACKEND = "Backend",
+  FRONTEND = "Frontend",
+  DESIGNER = "Designer",
+  PM = "PM",
+}
+
 @Entity("users")
 export class User extends BaseEntity {
   @PrimaryGeneratedColumn()
@@ -23,6 +30,14 @@ export class User extends BaseEntity {
 
   @Column({ select: false })
   password!: string;
+
+  @Column({
+    type: "enum",
+    enum: UserSkill,
+    nullable: true,
+    default: null,
+  })
+  skill!: UserSkill | null;
 
   @CreateDateColumn()
   createdAt!: Date;

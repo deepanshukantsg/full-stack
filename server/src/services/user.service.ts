@@ -1,5 +1,6 @@
 import { AppDataSource } from "../config/database";
 import { User } from "../entities/User";
+import { UserSkill } from "../entities/User";
 
 const userRepo = () => AppDataSource.getRepository(User);
 
@@ -18,7 +19,7 @@ export const createUser = async (data: Partial<User>): Promise<User> => {
 
 export const updateUser = async (
   id: number,
-  data: Partial<User>
+  data: Partial<User>,
 ): Promise<User | null> => {
   await userRepo().update(id, data);
   return userRepo().findOneBy({ id });
@@ -35,4 +36,12 @@ export const getUserByEmail = async (email: string): Promise<User | null> => {
     .addSelect("user.password")
     .where("user.email = :email", { email })
     .getOne();
+};
+
+export const updateUserSkills = async (
+  id: number,
+  skill: UserSkill,
+): Promise<User | null> => {
+  await userRepo().update(id, { skill });
+  return userRepo().findOneBy({ id });
 };

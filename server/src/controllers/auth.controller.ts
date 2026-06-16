@@ -21,7 +21,7 @@ export const registerUser = asyncHandler(
       message: "User Registered successfully! You can now login successfully",
       data: user,
     });
-  }
+  },
 );
 
 export const loginUser = asyncHandler(async (req: Request, res: Response) => {
@@ -43,9 +43,9 @@ export const loginUser = asyncHandler(async (req: Request, res: Response) => {
 
   //   create JWt token here
   const token = jwt.sign(
-    { id: isUserFound.id, email: isUserFound.email },
+    { id: isUserFound.id, email: isUserFound.email, skill: isUserFound.skill },
     process.env.JWT_SECRET as string,
-    { expiresIn: (process.env.JWT_EXPIRES_IN || "7d") as "7d" }
+    { expiresIn: (process.env.JWT_EXPIRES_IN || "7d") as "7d" },
   );
 
   res
@@ -55,7 +55,7 @@ export const loginUser = asyncHandler(async (req: Request, res: Response) => {
       sameSite: "strict",
       maxAge: 7 * 24 * 60 * 60 * 1000,
     })
-    .status(201)
+    .status(200)
     .json({
       message: "Login successful",
       data: {
@@ -63,6 +63,7 @@ export const loginUser = asyncHandler(async (req: Request, res: Response) => {
         email: isUserFound.email,
         firstName: isUserFound.firstName,
         lastName: isUserFound.lastName,
+        skill: isUserFound.skill,
         token,
       },
     });

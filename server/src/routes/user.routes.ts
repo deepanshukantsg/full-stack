@@ -9,6 +9,8 @@ const router = Router();
  *   get:
  *     summary: Get all users
  *     tags: [Users]
+ *     security:
+ *       - bearerAuth: []
  *     responses:
  *       200:
  *         description: List of all users
@@ -27,6 +29,8 @@ router.get("/", userController.getUsers);
  *   get:
  *     summary: Get user by ID
  *     tags: [Users]
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - in: path
  *         name: id
@@ -77,6 +81,8 @@ router.post("/", userController.createUser);
  *   put:
  *     summary: Update a user
  *     tags: [Users]
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - in: path
  *         name: id
@@ -107,10 +113,48 @@ router.put("/:id", userController.updateUser);
 
 /**
  * @swagger
+ * /api/users/{id}/skill:
+ *   put:
+ *     summary: Update a user's skill
+ *     tags: [Users]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/UpdateUserSkillBody'
+ *     responses:
+ *       201:
+ *         description: Skill updated
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/User'
+ *       404:
+ *         description: User not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ */
+router.put("/:id/skill", userController?.updateUserSkills);
+
+/**
+ * @swagger
  * /api/users/{id}:
  *   delete:
  *     summary: Delete a user
  *     tags: [Users]
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - in: path
  *         name: id

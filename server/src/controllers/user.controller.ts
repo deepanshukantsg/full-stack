@@ -48,6 +48,23 @@ export const updateUser = asyncHandler(async (req: Request, res: Response) => {
   });
 });
 
+// update the user skills
+export const updateUserSkills = asyncHandler(
+  async (req: Request, res: Response) => {
+    const id = Number(req?.params?.id);
+    const { skill } = req?.body;
+    const user = await userService.getUserById(id);
+    if (!user) throw new AppError(404, "User not found");
+
+    const updatedUser = await userService?.updateUserSkills(id, skill);
+
+    res.status(201).json({
+      message: "User skill updates successfully",
+      data: updatedUser,
+    });
+  },
+);
+
 export const deleteUser = asyncHandler(async (req: Request, res: Response) => {
   const id = Number(req.params.id);
   const deleted = await userService.deleteUser(id);

@@ -28,7 +28,7 @@ export async function loginUser(data: { email: string; password: string }) {
 
   const json = await res.json();
   if (!res.ok) throw new Error(json.message || "Login failed");
-  return json as { message: string; data: { id: number; email: string; firstName: string; lastName: string; token: string } };
+  return json as { message: string; data: { id: number; email: string; firstName: string; lastName: string; skill: string | null; token: string } };
 }
 
 export async function getUsers(token: string) {
@@ -38,5 +38,20 @@ export async function getUsers(token: string) {
 
   const json = await res.json();
   if (!res.ok) throw new Error(json.message || "Failed to fetch users");
-  return json as { id: number; email: string; firstName: string; lastName: string }[];
+  return json as { id: number; email: string; firstName: string; lastName: string; skill: string | null }[];
+}
+
+export async function updateUserSkill(token: string, id: number, skill: string) {
+  const res = await fetch(`${API_BASE}/users/${id}/skill`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ skill }),
+  });
+
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.message || "Failed to update skill");
+  return json as { message: string; data: { id: number; email: string; firstName: string; lastName: string; skill: string } };
 }

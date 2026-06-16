@@ -9,6 +9,13 @@ const options: swaggerJsdoc.Options = {
       description: "REST API with Express + TypeORM",
     },
     components: {
+      securitySchemes: {
+        bearerAuth: {
+          type: "http",
+          scheme: "bearer",
+          bearerFormat: "JWT",
+        },
+      },
       schemas: {
         User: {
           type: "object",
@@ -43,6 +50,17 @@ const options: swaggerJsdoc.Options = {
           type: "object",
           properties: {
             message: { type: "string", example: "User not found" },
+          },
+        },
+        UpdateUserSkillBody: {
+          type: "object",
+          required: ["skill"],
+          properties: {
+            skill: {
+              type: "string",
+              enum: ["Backend", "Frontend", "Designer", "PM"],
+              example: "Backend",
+            },
           },
         },
       },
