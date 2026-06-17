@@ -96,6 +96,33 @@ export async function updateTask(token: string, id: number, data: TaskPayload) {
   return json.data as Task;
 }
 
+export async function getTaskStats(token: string) {
+  const res = await fetch(`${API_BASE}/tasks/stats`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.message || "Failed to fetch stats");
+  return json.data as { total: number; completed: number; pending: number };
+}
+
+export async function searchTasks(token: string, query: string) {
+  const res = await fetch(`${API_BASE}/tasks/search?query=${encodeURIComponent(query)}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.message || "Failed to search tasks");
+  return json.data as Task[];
+}
+
+export async function getTasksByStatus(token: string, status: string) {
+  const res = await fetch(`${API_BASE}/tasks/status/${encodeURIComponent(status)}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.message || "Failed to fetch tasks");
+  return json.data as Task[];
+}
+
 export async function updateUserSkill(token: string, id: number, skill: string) {
   const res = await fetch(`${API_BASE}/users/${id}/skill`, {
     method: "PUT",

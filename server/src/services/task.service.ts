@@ -31,3 +31,32 @@ export const deleteTask = async (id: number): Promise<boolean> => {
   const result = await taskRepo().delete(id);
   return (result.affected ?? 0) > 0;
 };
+
+export const getTasksByStatus = async (status: string): Promise<Tasks[]> => {
+  return taskRepo().find({
+    where: { status: status as Tasks["status"] },
+    relations: { developer: true },
+  });
+};
+
+export const searchTasks = async (query: string): Promise<Tasks[]> => {
+  return taskRepo()
+    .createQueryBuilder("task")
+    .leftJoinAndSelect("task.developer", "developer")
+    .where("LOWER(task.title) LIKE LOWER(:q) OR LOWER(task.description) LIKE LOWER(:q)", {
+      q: `%${query}%`,
+    })
+    .getMany();
+};
+
+export const getTaskStats = async (): Promise<{
+  total: number;
+  completed: number;
+  pending: number;
+}> => {
+  const total = await taskRepo().count();
+  const completed = await taskRepo().count({
+    where: { status: "Dev Complete" as Tasks["status"] },
+  });
+  return { total, completed, pending: total - completed };
+};

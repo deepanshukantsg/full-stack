@@ -1,12 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
   getTasks,
   createTask,
   updateTask,
   getUsers,
+  getTaskStats,
+  searchTasks,
+  getTasksByStatus,
   Task,
   TaskPayload,
 } from "../lib/api";
@@ -36,6 +39,7 @@ const PRIORITY_COLORS: Record<Task["priority"], string> = {
 };
 
 type User = { id: number; firstName: string; lastName: string; email: string };
+type Stats = { total: number; completed: number; pending: number };
 
 const EMPTY_FORM: TaskPayload = {
   title: "",
@@ -52,8 +56,14 @@ export default function TasksPage() {
   const [userId, setUserId] = useState<number | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [users, setUsers] = useState<User[]>([]);
+  const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+
+  const [activeStatus, setActiveStatus] = useState<Task["status"] | "All">("All");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searching, setSearching] = useState(false);
+  const searchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [showCreate, setShowCreate] = useState(false);
   const [editTask, setEditTask] = useState<Task | null>(null);
@@ -63,35 +73,74 @@ export default function TasksPage() {
 
   useEffect(() => {
     const t = localStorage.getItem("token");
-    if (!t) {
-      router.push("/login");
-      return;
-    }
+    if (!t) { router.push("/login"); return; }
     try {
       const payload = JSON.parse(atob(t.split(".")[1]));
       setToken(t);
       setUserId(payload.id ?? null);
-      fetchData(t, payload.id);
+      fetchAll(t, payload.id);
     } catch {
       router.push("/login");
     }
   }, []);
 
-  async function fetchData(t: string, uid: number) {
+  async function fetchAll(t: string, uid: number) {
     setLoading(true);
     setError("");
     try {
-      const [taskData, userData] = await Promise.all([
+      const [taskData, userData, statsData] = await Promise.all([
         getTasks(t, uid),
         getUsers(t),
+        getTaskStats(t),
       ]);
       setTasks(taskData);
       setUsers(userData);
+      setStats(statsData);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to load data");
     } finally {
       setLoading(false);
     }
+  }
+
+  async function applyStatusFilter(status: Task["status"] | "All") {
+    if (!token || !userId) return;
+    setActiveStatus(status);
+    setSearchQuery("");
+    setError("");
+    try {
+      if (status === "All") {
+        const data = await getTasks(token, userId);
+        setTasks(data);
+      } else {
+        const data = await getTasksByStatus(token, status);
+        setTasks(data.filter((t) => t.developerId === userId));
+      }
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to filter tasks");
+    }
+  }
+
+  function handleSearchChange(q: string) {
+    setSearchQuery(q);
+    setActiveStatus("All");
+    if (searchTimeout.current) clearTimeout(searchTimeout.current);
+    if (!q.trim()) {
+      if (token && userId) fetchAll(token, userId);
+      return;
+    }
+    searchTimeout.current = setTimeout(async () => {
+      if (!token || !userId) return;
+      setSearching(true);
+      try {
+        const data = await searchTasks(token, q.trim());
+        setTasks(data.filter((t) => t.developerId === userId));
+      } catch (err: unknown) {
+        setError(err instanceof Error ? err.message : "Search failed");
+      } finally {
+        setSearching(false);
+      }
+    }, 400);
   }
 
   function openCreate() {
@@ -130,6 +179,7 @@ export default function TasksPage() {
     try {
       const task = await createTask(token, form);
       if (task.developerId === userId) setTasks((prev) => [task, ...prev]);
+      if (stats) setStats({ ...stats, total: stats.total + 1, pending: stats.pending + 1 });
       closeModals();
     } catch (err: unknown) {
       setFormError(err instanceof Error ? err.message : "Failed to create task");
@@ -149,6 +199,11 @@ export default function TasksPage() {
           ? prev.map((t) => (t.id === updated.id ? updated : t))
           : prev.filter((t) => t.id !== updated.id),
       );
+      if (stats && editTask.status !== "Dev Complete" && updated.status === "Dev Complete") {
+        setStats({ ...stats, completed: stats.completed + 1, pending: stats.pending - 1 });
+      } else if (stats && editTask.status === "Dev Complete" && updated.status !== "Dev Complete") {
+        setStats({ ...stats, completed: stats.completed - 1, pending: stats.pending + 1 });
+      }
       closeModals();
     } catch (err: unknown) {
       setFormError(err instanceof Error ? err.message : "Failed to update task");
@@ -164,12 +219,11 @@ export default function TasksPage() {
   return (
     <main className="min-h-screen bg-gray-50 py-10 px-4 text-black">
       <div className="max-w-3xl mx-auto">
-        <div className="flex items-center justify-between mb-8">
+
+        {/* Header */}
+        <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
-            <button
-              onClick={() => router.push("/")}
-              className="text-sm text-gray-500 hover:text-gray-800 transition"
-            >
+            <button onClick={() => router.push("/")} className="text-sm text-gray-500 hover:text-gray-800 transition">
               Home
             </button>
             <span className="text-gray-300">/</span>
@@ -183,15 +237,59 @@ export default function TasksPage() {
           </button>
         </div>
 
-        {loading && <p className="text-center text-sm text-gray-500">Loading...</p>}
-        {error && <p className="text-center text-sm text-red-600">{error}</p>}
-
-        {!loading && tasks.length === 0 && (
-          <p className="text-center text-sm text-gray-400 mt-20">
-            No tasks assigned to you yet.
-          </p>
+        {/* Stats */}
+        {stats && (
+          <div className="grid grid-cols-3 gap-3 mb-6">
+            {[
+              { label: "Total", value: stats.total, color: "bg-white" },
+              { label: "Completed", value: stats.completed, color: "bg-green-50" },
+              { label: "Pending", value: stats.pending, color: "bg-orange-50" },
+            ].map(({ label, value, color }) => (
+              <div key={label} className={`${color} rounded-2xl shadow-sm p-4 text-center`}>
+                <p className="text-2xl font-bold">{value}</p>
+                <p className="text-xs text-gray-500 mt-1">{label}</p>
+              </div>
+            ))}
+          </div>
         )}
 
+        {/* Search */}
+        <div className="relative mb-4">
+          <input
+            value={searchQuery}
+            onChange={(e) => handleSearchChange(e.target.value)}
+            placeholder="Search tasks..."
+            className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+          />
+          {searching && (
+            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">Searching...</span>
+          )}
+        </div>
+
+        {/* Status tabs */}
+        <div className="flex gap-2 flex-wrap mb-6">
+          {(["All", ...STATUSES] as const).map((s) => (
+            <button
+              key={s}
+              onClick={() => applyStatusFilter(s as Task["status"] | "All")}
+              className={`text-xs px-3 py-1.5 rounded-full border transition ${
+                activeStatus === s
+                  ? "bg-blue-600 text-white border-blue-600"
+                  : "bg-white text-gray-600 border-gray-300 hover:border-blue-400"
+              }`}
+            >
+              {s}
+            </button>
+          ))}
+        </div>
+
+        {error && <p className="text-center text-sm text-red-600 mb-4">{error}</p>}
+        {loading && <p className="text-center text-sm text-gray-500">Loading...</p>}
+        {!loading && tasks.length === 0 && (
+          <p className="text-center text-sm text-gray-400 mt-20">No tasks found.</p>
+        )}
+
+        {/* Task list */}
         <ul className="space-y-3">
           {tasks.map((task) => (
             <li key={task.id}>
@@ -202,9 +300,7 @@ export default function TasksPage() {
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex-1 min-w-0">
                     <p className="font-semibold text-sm truncate">{task.title}</p>
-                    <p className="text-xs text-gray-500 mt-1 line-clamp-2">
-                      {task.description}
-                    </p>
+                    <p className="text-xs text-gray-500 mt-1 line-clamp-2">{task.description}</p>
                   </div>
                   <div className="flex flex-col items-end gap-1 shrink-0">
                     <span className={`text-xs px-2 py-0.5 rounded-full ${STATUS_COLORS[task.status]}`}>
@@ -226,6 +322,7 @@ export default function TasksPage() {
         </ul>
       </div>
 
+      {/* Create / Edit modal */}
       {(showCreate || editTask) && (
         <div
           className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 px-4"
@@ -269,9 +366,7 @@ export default function TasksPage() {
                     onChange={(e) => field("status", e.target.value)}
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
-                    {STATUSES.map((s) => (
-                      <option key={s} value={s}>{s}</option>
-                    ))}
+                    {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
                   </select>
                 </div>
 
@@ -282,9 +377,7 @@ export default function TasksPage() {
                     onChange={(e) => field("priority", e.target.value)}
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
-                    {PRIORITIES.map((p) => (
-                      <option key={p} value={p}>{p}</option>
-                    ))}
+                    {PRIORITIES.map((p) => <option key={p} value={p}>{p}</option>)}
                   </select>
                 </div>
               </div>
@@ -316,9 +409,7 @@ export default function TasksPage() {
               </div>
             </div>
 
-            {formError && (
-              <p className="text-xs text-red-600 mt-3">{formError}</p>
-            )}
+            {formError && <p className="text-xs text-red-600 mt-3">{formError}</p>}
 
             <div className="flex gap-3 mt-6">
               <button

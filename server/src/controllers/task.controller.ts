@@ -4,7 +4,9 @@ import { asyncHandler } from "../middleware/asyncHandler";
 import * as taskService from "../services/task.service";
 
 export const getTasks = asyncHandler(async (req: Request, res: Response) => {
-  const developerId = req.query.developerId ? Number(req.query.developerId) : undefined;
+  const developerId = req.query.developerId
+    ? Number(req.query.developerId)
+    : undefined;
   const tasks = await taskService.getAllTasks(developerId);
   res.status(200).json({
     message: "All tasks fetched successfully",
@@ -44,3 +46,36 @@ export const deleteTask = asyncHandler(async (req: Request, res: Response) => {
   if (!deleted) throw new AppError(404, "Task not found");
   res.status(204).send();
 });
+
+export const getTasksByStatus = asyncHandler(
+  async (req: Request, res: Response) => {
+    const status = String(req.params.status);
+    const tasks = await taskService.getTasksByStatus(status);
+    res
+      .status(200)
+      .json({ message: "Tasks fetched successfully", data: tasks });
+  },
+);
+
+export const searchTasks = asyncHandler(async (req: Request, res: Response) => {
+  const raw = req.query.query;
+  const query = (
+    typeof raw === "string"
+      ? raw
+      : Array.isArray(raw)
+        ? String(raw[0] ?? "")
+        : ""
+  ).trim();
+  if (!query) throw new AppError(400, "query param is required");
+  const tasks = await taskService.searchTasks(query);
+  res.status(200).json({ message: "Tasks fetched successfully", data: tasks });
+});
+
+export const getTaskStats = asyncHandler(
+  async (_req: Request, res: Response) => {
+    const stats = await taskService.getTaskStats();
+    res
+      .status(200)
+      .json({ message: "Stats fetched successfully", data: stats });
+  },
+);
