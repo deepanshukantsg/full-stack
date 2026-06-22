@@ -104,7 +104,7 @@ export async function getTasks(
   });
   const json = await res.json();
   if (!res.ok) throw new Error(json.message || "Failed to fetch tasks");
-  return json.data as Task[];
+  return { tasks: json.data as Task[], total: json.pagination.total as number };
 }
 
 export async function createTask(token: string, data: TaskPayload) {
@@ -144,28 +144,46 @@ export async function getTaskStats(token: string) {
   return json.data as { total: number; completed: number; pending: number };
 }
 
-export async function searchTasks(token: string, query: string) {
-  const res = await fetch(
-    `${API_BASE}/tasks/search?query=${encodeURIComponent(query)}`,
-    {
-      headers: { Authorization: `Bearer ${token}` },
-    },
-  );
+export async function searchTasks(
+  token: string,
+  query: string,
+  developerId?: number,
+  limit = 20,
+  offset = 0,
+) {
+  const params = new URLSearchParams({
+    query,
+    limit: String(limit),
+    offset: String(offset),
+  });
+  if (developerId) params.set("developerId", String(developerId));
+  const res = await fetch(`${API_BASE}/tasks/search?${params}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
   const json = await res.json();
   if (!res.ok) throw new Error(json.message || "Failed to search tasks");
-  return json.data as Task[];
+  return { tasks: json.data as Task[], total: json.pagination.total as number };
 }
 
-export async function getTasksByStatus(token: string, status: string) {
+export async function getTasksByStatus(
+  token: string,
+  status: string,
+  developerId?: number,
+  limit = 20,
+  offset = 0,
+) {
+  const params = new URLSearchParams({
+    limit: String(limit),
+    offset: String(offset),
+  });
+  if (developerId) params.set("developerId", String(developerId));
   const res = await fetch(
-    `${API_BASE}/tasks/status/${encodeURIComponent(status)}`,
-    {
-      headers: { Authorization: `Bearer ${token}` },
-    },
+    `${API_BASE}/tasks/status/${encodeURIComponent(status)}?${params}`,
+    { headers: { Authorization: `Bearer ${token}` } },
   );
   const json = await res.json();
   if (!res.ok) throw new Error(json.message || "Failed to fetch tasks");
-  return json.data as Task[];
+  return { tasks: json.data as Task[], total: json.pagination.total as number };
 }
 
 export async function updateUserSkill(

@@ -38,6 +38,8 @@ const PRIORITY_COLORS: Record<Task["priority"], string> = {
   HIGHEST: "bg-red-200 text-red-800 font-semibold",
 };
 
+const PAGE_LIMIT = 10;
+
 type User = { id: number; firstName: string; lastName: string; email: string };
 type Stats = { total: number; completed: number; pending: number };
 
@@ -60,10 +62,15 @@ export default function TasksPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const [activeStatus, setActiveStatus] = useState<Task["status"] | "All">("All");
+  const [activeStatus, setActiveStatus] = useState<Task["status"] | "All">(
+    "All",
+  );
   const [searchQuery, setSearchQuery] = useState("");
   const [searching, setSearching] = useState(false);
   const searchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const [offset, setOffset] = useState(0);
+  const [total, setTotal] = useState(0);
 
   const [showCreate, setShowCreate] = useState(false);
   const [editTask, setEditTask] = useState<Task | null>(null);
@@ -73,29 +80,35 @@ export default function TasksPage() {
 
   useEffect(() => {
     const t = localStorage.getItem("token");
-    if (!t) { router.push("/login"); return; }
+    if (!t) {
+      router.push("/login");
+      return;
+    }
     try {
       const payload = JSON.parse(atob(t.split(".")[1]));
       setToken(t);
       setUserId(payload.id ?? null);
-      fetchAll(t, payload.id);
+      fetchAll(t, payload.id, 0);
     } catch {
       router.push("/login");
     }
   }, []);
 
-  async function fetchAll(t: string, uid: number) {
+  async function fetchAll(t: string, uid: number, newOffset: number) {
     setLoading(true);
     setError("");
     try {
-      const [taskData, userData, statsData] = await Promise.all([
-        getTasks(t, uid),
-        getUsers(t),
-        getTaskStats(t),
-      ]);
+      const [{ tasks: taskData, total: taskTotal }, userData, statsData] =
+        await Promise.all([
+          getTasks(t, uid, PAGE_LIMIT, newOffset),
+          getUsers(t),
+          getTaskStats(t),
+        ]);
       setTasks(taskData);
+      setTotal(taskTotal);
       setUsers(userData);
       setStats(statsData);
+      setOffset(newOffset);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to load data");
     } finally {
@@ -103,44 +116,118 @@ export default function TasksPage() {
     }
   }
 
-  async function applyStatusFilter(status: Task["status"] | "All") {
+  async function applyStatusFilter(
+    status: Task["status"] | "All",
+    newOffset = 0,
+  ) {
     if (!token || !userId) return;
     setActiveStatus(status);
     setSearchQuery("");
     setError("");
+    setLoading(true);
     try {
       if (status === "All") {
-        const data = await getTasks(token, userId);
+        const { tasks: data, total: t } = await getTasks(
+          token,
+          userId,
+          PAGE_LIMIT,
+          newOffset,
+        );
         setTasks(data);
+        setTotal(t);
       } else {
-        const data = await getTasksByStatus(token, status);
-        setTasks(data.filter((t) => t.developerId === userId));
+        const { tasks: data, total: t } = await getTasksByStatus(
+          token,
+          status,
+          userId,
+          PAGE_LIMIT,
+          newOffset,
+        );
+        setTasks(data);
+        setTotal(t);
       }
+      setOffset(newOffset);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to filter tasks");
+    } finally {
+      setLoading(false);
     }
   }
 
   function handleSearchChange(q: string) {
     setSearchQuery(q);
     setActiveStatus("All");
+    setOffset(0);
     if (searchTimeout.current) clearTimeout(searchTimeout.current);
     if (!q.trim()) {
-      if (token && userId) fetchAll(token, userId);
+      if (token && userId) fetchAll(token, userId, 0);
       return;
     }
     searchTimeout.current = setTimeout(async () => {
       if (!token || !userId) return;
       setSearching(true);
       try {
-        const data = await searchTasks(token, q.trim());
-        setTasks(data.filter((t) => t.developerId === userId));
+        const { tasks: data, total: t } = await searchTasks(
+          token,
+          q.trim(),
+          userId,
+          PAGE_LIMIT,
+          0,
+        );
+        setTasks(data);
+        setTotal(t);
+        setOffset(0);
       } catch (err: unknown) {
         setError(err instanceof Error ? err.message : "Search failed");
       } finally {
         setSearching(false);
       }
     }, 400);
+  }
+
+  async function handlePageChange(newOffset: number) {
+    if (!token || !userId) return;
+    setLoading(true);
+    setError("");
+    try {
+      if (searchQuery.trim()) {
+        const { tasks: data, total: t } = await searchTasks(
+          token,
+          searchQuery.trim(),
+          userId,
+          PAGE_LIMIT,
+          newOffset,
+        );
+        setTasks(data);
+        setTotal(t);
+        setOffset(newOffset);
+      } else if (activeStatus === "All") {
+        const { tasks: data, total: t } = await getTasks(
+          token,
+          userId,
+          PAGE_LIMIT,
+          newOffset,
+        );
+        setTasks(data);
+        setTotal(t);
+        setOffset(newOffset);
+      } else {
+        const { tasks: data, total: t } = await getTasksByStatus(
+          token,
+          activeStatus,
+          userId,
+          PAGE_LIMIT,
+          newOffset,
+        );
+        setTasks(data);
+        setTotal(t);
+        setOffset(newOffset);
+      }
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to load tasks");
+    } finally {
+      setLoading(false);
+    }
   }
 
   function openCreate() {
@@ -177,12 +264,19 @@ export default function TasksPage() {
     setSubmitting(true);
     setFormError("");
     try {
-      const task = await createTask(token, form);
-      if (task.developerId === userId) setTasks((prev) => [task, ...prev]);
-      if (stats) setStats({ ...stats, total: stats.total + 1, pending: stats.pending + 1 });
+      await createTask(token, form);
+      if (token && userId) fetchAll(token, userId, 0);
+      if (stats)
+        setStats({
+          ...stats,
+          total: stats.total + 1,
+          pending: stats.pending + 1,
+        });
       closeModals();
     } catch (err: unknown) {
-      setFormError(err instanceof Error ? err.message : "Failed to create task");
+      setFormError(
+        err instanceof Error ? err.message : "Failed to create task",
+      );
     } finally {
       setSubmitting(false);
     }
@@ -199,14 +293,32 @@ export default function TasksPage() {
           ? prev.map((t) => (t.id === updated.id ? updated : t))
           : prev.filter((t) => t.id !== updated.id),
       );
-      if (stats && editTask.status !== "Dev Complete" && updated.status === "Dev Complete") {
-        setStats({ ...stats, completed: stats.completed + 1, pending: stats.pending - 1 });
-      } else if (stats && editTask.status === "Dev Complete" && updated.status !== "Dev Complete") {
-        setStats({ ...stats, completed: stats.completed - 1, pending: stats.pending + 1 });
+      if (
+        stats &&
+        editTask.status !== "Dev Complete" &&
+        updated.status === "Dev Complete"
+      ) {
+        setStats({
+          ...stats,
+          completed: stats.completed + 1,
+          pending: stats.pending - 1,
+        });
+      } else if (
+        stats &&
+        editTask.status === "Dev Complete" &&
+        updated.status !== "Dev Complete"
+      ) {
+        setStats({
+          ...stats,
+          completed: stats.completed - 1,
+          pending: stats.pending + 1,
+        });
       }
       closeModals();
     } catch (err: unknown) {
-      setFormError(err instanceof Error ? err.message : "Failed to update task");
+      setFormError(
+        err instanceof Error ? err.message : "Failed to update task",
+      );
     } finally {
       setSubmitting(false);
     }
@@ -216,14 +328,19 @@ export default function TasksPage() {
     setForm((prev) => ({ ...prev, [key]: value }));
   }
 
+  const totalPages = Math.ceil(total / PAGE_LIMIT);
+  const currentPage = Math.floor(offset / PAGE_LIMIT) + 1;
+
   return (
     <main className="min-h-screen bg-gray-50 py-10 px-4 text-black">
       <div className="max-w-3xl mx-auto">
-
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
-            <button onClick={() => router.push("/")} className="text-sm text-gray-500 hover:text-gray-800 transition">
+            <button
+              onClick={() => router.push("/")}
+              className="text-sm text-gray-500 hover:text-gray-800 transition"
+            >
               Home
             </button>
             <span className="text-gray-300">/</span>
@@ -242,10 +359,17 @@ export default function TasksPage() {
           <div className="grid grid-cols-3 gap-3 mb-6">
             {[
               { label: "Total", value: stats.total, color: "bg-white" },
-              { label: "Completed", value: stats.completed, color: "bg-green-50" },
+              {
+                label: "Completed",
+                value: stats.completed,
+                color: "bg-green-50",
+              },
               { label: "Pending", value: stats.pending, color: "bg-orange-50" },
             ].map(({ label, value, color }) => (
-              <div key={label} className={`${color} rounded-2xl shadow-sm p-4 text-center`}>
+              <div
+                key={label}
+                className={`${color} rounded-2xl shadow-sm p-4 text-center`}
+              >
                 <p className="text-2xl font-bold">{value}</p>
                 <p className="text-xs text-gray-500 mt-1">{label}</p>
               </div>
@@ -262,7 +386,9 @@ export default function TasksPage() {
             className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
           />
           {searching && (
-            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">Searching...</span>
+            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">
+              Searching...
+            </span>
           )}
         </div>
 
@@ -271,7 +397,7 @@ export default function TasksPage() {
           {(["All", ...STATUSES] as const).map((s) => (
             <button
               key={s}
-              onClick={() => applyStatusFilter(s as Task["status"] | "All")}
+              onClick={() => applyStatusFilter(s as Task["status"] | "All", 0)}
               className={`text-xs px-3 py-1.5 rounded-full border transition ${
                 activeStatus === s
                   ? "bg-blue-600 text-white border-blue-600"
@@ -283,10 +409,16 @@ export default function TasksPage() {
           ))}
         </div>
 
-        {error && <p className="text-center text-sm text-red-600 mb-4">{error}</p>}
-        {loading && <p className="text-center text-sm text-gray-500">Loading...</p>}
+        {error && (
+          <p className="text-center text-sm text-red-600 mb-4">{error}</p>
+        )}
+        {loading && (
+          <p className="text-center text-sm text-gray-500">Loading...</p>
+        )}
         {!loading && tasks.length === 0 && (
-          <p className="text-center text-sm text-gray-400 mt-20">No tasks found.</p>
+          <p className="text-center text-sm text-gray-400 mt-20">
+            No tasks found.
+          </p>
         )}
 
         {/* Task list */}
@@ -299,14 +431,22 @@ export default function TasksPage() {
               >
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-sm truncate">{task.title}</p>
-                    <p className="text-xs text-gray-500 mt-1 line-clamp-2">{task.description}</p>
+                    <p className="font-semibold text-sm truncate">
+                      {task.title}
+                    </p>
+                    <p className="text-xs text-gray-500 mt-1 line-clamp-2">
+                      {task.description}
+                    </p>
                   </div>
                   <div className="flex flex-col items-end gap-1 shrink-0">
-                    <span className={`text-xs px-2 py-0.5 rounded-full ${STATUS_COLORS[task.status]}`}>
+                    <span
+                      className={`text-xs px-2 py-0.5 rounded-full ${STATUS_COLORS[task.status]}`}
+                    >
                       {task.status}
                     </span>
-                    <span className={`text-xs px-2 py-0.5 rounded-full ${PRIORITY_COLORS[task.priority]}`}>
+                    <span
+                      className={`text-xs px-2 py-0.5 rounded-full ${PRIORITY_COLORS[task.priority]}`}
+                    >
                       {task.priority}
                     </span>
                   </div>
@@ -320,6 +460,35 @@ export default function TasksPage() {
             </li>
           ))}
         </ul>
+
+        {/* Pagination */}
+        {!loading && total > PAGE_LIMIT && (
+          <div className="flex items-center justify-between mt-6">
+            <p className="text-xs text-gray-500">
+              Showing {offset + 1}–{Math.min(offset + PAGE_LIMIT, total)} of{" "}
+              {total} tasks
+            </p>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => handlePageChange(offset - PAGE_LIMIT)}
+                disabled={offset === 0}
+                className="px-3 py-1.5 rounded-lg border border-gray-300 text-sm text-gray-600 hover:border-blue-400 disabled:opacity-40 disabled:cursor-not-allowed transition"
+              >
+                ← Prev
+              </button>
+              <span className="text-xs text-gray-500 px-1">
+                {currentPage} / {totalPages}
+              </span>
+              <button
+                onClick={() => handlePageChange(offset + PAGE_LIMIT)}
+                disabled={offset + PAGE_LIMIT >= total}
+                className="px-3 py-1.5 rounded-lg border border-gray-300 text-sm text-gray-600 hover:border-blue-400 disabled:opacity-40 disabled:cursor-not-allowed transition"
+              >
+                Next →
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Create / Edit modal */}
@@ -348,7 +517,9 @@ export default function TasksPage() {
               </div>
 
               <div>
-                <label className="block text-xs font-medium mb-1">Description</label>
+                <label className="block text-xs font-medium mb-1">
+                  Description
+                </label>
                 <textarea
                   value={form.description ?? ""}
                   onChange={(e) => field("description", e.target.value)}
@@ -360,30 +531,44 @@ export default function TasksPage() {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-medium mb-1">Status</label>
+                  <label className="block text-xs font-medium mb-1">
+                    Status
+                  </label>
                   <select
                     value={form.status}
                     onChange={(e) => field("status", e.target.value)}
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
-                    {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+                    {STATUSES.map((s) => (
+                      <option key={s} value={s}>
+                        {s}
+                      </option>
+                    ))}
                   </select>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-medium mb-1">Priority</label>
+                  <label className="block text-xs font-medium mb-1">
+                    Priority
+                  </label>
                   <select
                     value={form.priority}
                     onChange={(e) => field("priority", e.target.value)}
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
-                    {PRIORITIES.map((p) => <option key={p} value={p}>{p}</option>)}
+                    {PRIORITIES.map((p) => (
+                      <option key={p} value={p}>
+                        {p}
+                      </option>
+                    ))}
                   </select>
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-medium mb-1">Due Date</label>
+                <label className="block text-xs font-medium mb-1">
+                  Due Date
+                </label>
                 <input
                   type="date"
                   value={form.dueDate ?? ""}
@@ -393,23 +578,33 @@ export default function TasksPage() {
               </div>
 
               <div>
-                <label className="block text-xs font-medium mb-1">Assign To</label>
+                <label className="block text-xs font-medium mb-1">
+                  Assign To
+                </label>
                 <select
                   value={form.developerId ?? ""}
-                  onChange={(e) => field("developerId", e.target.value ? Number(e.target.value) : null)}
+                  onChange={(e) =>
+                    field(
+                      "developerId",
+                      e.target.value ? Number(e.target.value) : null,
+                    )
+                  }
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="">Unassigned</option>
                   {users.map((u) => (
                     <option key={u.id} value={u.id}>
-                      {u.firstName} {u.lastName}{u.id === userId ? " (me)" : ""}
+                      {u.firstName} {u.lastName}
+                      {u.id === userId ? " (me)" : ""}
                     </option>
                   ))}
                 </select>
               </div>
             </div>
 
-            {formError && <p className="text-xs text-red-600 mt-3">{formError}</p>}
+            {formError && (
+              <p className="text-xs text-red-600 mt-3">{formError}</p>
+            )}
 
             <div className="flex gap-3 mt-6">
               <button

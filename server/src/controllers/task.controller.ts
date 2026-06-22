@@ -57,10 +57,22 @@ export const deleteTask = asyncHandler(async (req: Request, res: Response) => {
 export const getTasksByStatus = asyncHandler(
   async (req: Request, res: Response) => {
     const status = String(req.params.status);
-    const tasks = await taskService.getTasksByStatus(status);
-    res
-      .status(200)
-      .json({ message: "Tasks fetched successfully", data: tasks });
+    const developerId = req.query.developerId
+      ? Number(req.query.developerId)
+      : undefined;
+    const limit = req.query.limit ? Math.min(Number(req.query.limit), 100) : 20;
+    const offset = req.query.offset ? Number(req.query.offset) : 0;
+    const { tasks, total } = await taskService.getTasksByStatus(
+      status,
+      developerId,
+      limit,
+      offset,
+    );
+    res.status(200).json({
+      message: "Tasks fetched successfully",
+      data: tasks,
+      pagination: { total, limit, offset },
+    });
   },
 );
 
@@ -74,8 +86,22 @@ export const searchTasks = asyncHandler(async (req: Request, res: Response) => {
         : ""
   ).trim();
   if (!query) throw new AppError(400, "query param is required");
-  const tasks = await taskService.searchTasks(query);
-  res.status(200).json({ message: "Tasks fetched successfully", data: tasks });
+  const developerId = req.query.developerId
+    ? Number(req.query.developerId)
+    : undefined;
+  const limit = req.query.limit ? Math.min(Number(req.query.limit), 100) : 20;
+  const offset = req.query.offset ? Number(req.query.offset) : 0;
+  const { tasks, total } = await taskService.searchTasks(
+    query,
+    developerId,
+    limit,
+    offset,
+  );
+  res.status(200).json({
+    message: "Tasks fetched successfully",
+    data: tasks,
+    pagination: { total, limit, offset },
+  });
 });
 
 export const getTaskStats = asyncHandler(
