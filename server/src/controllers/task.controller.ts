@@ -7,10 +7,17 @@ export const getTasks = asyncHandler(async (req: Request, res: Response) => {
   const developerId = req.query.developerId
     ? Number(req.query.developerId)
     : undefined;
-  const tasks = await taskService.getAllTasks(developerId);
+  const limit = req.query.limit ? Math.min(Number(req.query.limit), 100) : 20;
+  const offset = req.query.offset ? Number(req.query.offset) : 0;
+  const { tasks, total } = await taskService.getAllTasks(
+    developerId,
+    limit,
+    offset,
+  );
   res.status(200).json({
     message: "All tasks fetched successfully",
     data: tasks,
+    pagination: { total, limit, offset },
   });
 });
 
@@ -19,7 +26,7 @@ export const getTask = asyncHandler(async (req: Request, res: Response) => {
   const task = await taskService.getTaskById(id);
   if (!task) throw new AppError(404, "Task not found");
   res.status(200).json({
-    message: "task fecthed successfully",
+    message: "Task fetched successfully",
     data: task,
   });
 });
@@ -79,3 +86,11 @@ export const getTaskStats = asyncHandler(
       .json({ message: "Stats fetched successfully", data: stats });
   },
 );
+
+export const assignTask = asyncHandler(async (req: Request, res: Response) => {
+  const id = Number(req.params.id);
+  const { developerId } = req.body;
+  const task = await taskService.assignTask(id, developerId ?? null);
+  if (!task) throw new AppError(404, "Task not found");
+  res.status(200).json({ message: "Task assigned successfully", data: task });
+});

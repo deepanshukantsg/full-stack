@@ -224,4 +224,45 @@ router.put("/:id", taskController.updateTask);
  */
 router.delete("/:id", taskController.deleteTask);
 
+/**
+ * @swagger
+ * /api/tasks/{id}/assign:
+ *   put:
+ *     summary: Assign a task to a developer
+ *     tags: [Tasks]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               developerId:
+ *                 type: integer
+ *                 nullable: true
+ *                 example: 3
+ *     responses:
+ *       200:
+ *         description: Task assigned
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Task'
+ *       404:
+ *         description: Task not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ */
+router.put("/:id/assign", taskController.assignTask);
+
 export default router;

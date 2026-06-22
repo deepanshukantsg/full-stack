@@ -33,12 +33,12 @@ export const loginUser = asyncHandler(async (req: Request, res: Response) => {
   //   find the user with email first
   const isUserFound = await userService?.getUserByEmail(email);
   if (!isUserFound) {
-    throw new AppError(404, "User not found");
+    throw new AppError(401, "Invalid email or password");
   }
 
   const isPasswordValid = bcrypt.compareSync(password, isUserFound.password);
   if (!isPasswordValid) {
-    throw new AppError(401, "Invalid credentials");
+    throw new AppError(401, "Invalid email or password");
   }
 
   //   create JWt token here

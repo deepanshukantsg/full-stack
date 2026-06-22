@@ -33,14 +33,15 @@ export const createUser = asyncHandler(async (req: Request, res: Response) => {
 export const updateUser = asyncHandler(async (req: Request, res: Response) => {
   const id = Number(req.params.id);
 
-  const { password } = req?.body;
+  const updateData = { ...req.body };
+  if (req.body.password) {
+    updateData.password = bcrypt.hashSync(
+      req.body.password,
+      bcrypt.genSaltSync(10),
+    );
+  }
 
-  const hashedPassword = bcrypt.hashSync(password, bcrypt.genSaltSync(10));
-
-  const user = await userService.updateUser(id, {
-    ...req?.body,
-    password: hashedPassword,
-  });
+  const user = await userService.updateUser(id, updateData);
   if (!user) throw new AppError(404, "User not found");
   res.status(201).json({
     message: "User updated successfully",

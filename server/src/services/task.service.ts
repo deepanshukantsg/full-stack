@@ -3,11 +3,27 @@ import { Tasks } from "../entities/Tasks";
 
 const taskRepo = () => AppDataSource.getRepository(Tasks);
 
-export const getAllTasks = async (developerId?: number): Promise<Tasks[]> => {
-  return taskRepo().find({
+export const getAllTasks = async (
+  developerId?: number,
+  limit = 20,
+  offset = 0,
+): Promise<{ tasks: Tasks[]; total: number }> => {
+  const [tasks, total] = await taskRepo().findAndCount({
     where: developerId ? { developerId } : undefined,
     relations: { developer: true },
+    take: limit,
+    skip: offset,
+    order: { createdAt: "DESC" },
   });
+  return { tasks, total };
+};
+
+export const assignTask = async (
+  id: number,
+  developerId: number | null,
+): Promise<Tasks | null> => {
+  await taskRepo().update(id, { developerId });
+  return taskRepo().findOne({ where: { id }, relations: { developer: true } });
 };
 
 export const getTaskById = async (id: number): Promise<Tasks | null> => {
@@ -43,9 +59,12 @@ export const searchTasks = async (query: string): Promise<Tasks[]> => {
   return taskRepo()
     .createQueryBuilder("task")
     .leftJoinAndSelect("task.developer", "developer")
-    .where("LOWER(task.title) LIKE LOWER(:q) OR LOWER(task.description) LIKE LOWER(:q)", {
-      q: `%${query}%`,
-    })
+    .where(
+      "LOWER(task.title) LIKE LOWER(:q) OR LOWER(task.description) LIKE LOWER(:q)",
+      {
+        q: `%${query}%`,
+      },
+    )
     .getMany();
 };
 
